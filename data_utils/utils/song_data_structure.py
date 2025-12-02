@@ -9,7 +9,7 @@ class McpaMusic:
 
     def __init__(self, melody, chord, acc, phrase_label,
                  num_beat_per_measure=4, num_step_per_beat=4,
-                 song_name=None, clean_chord_unit=4, embedding):
+                 song_name=None, clean_chord_unit=4, embedding=None):
         self.song_name = song_name
         self.embedding = embedding
 
