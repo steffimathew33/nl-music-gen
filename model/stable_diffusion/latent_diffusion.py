@@ -202,6 +202,7 @@ class LatentDiffusion(nn.Module):
         x0: torch.Tensor,
         autoreg_cond: Union[torch.Tensor, None],
         external_cond: Union[torch.Tensor, None],
+        text_cond: Union[torch.Tensor, None],
         noise: Optional[torch.Tensor] = None,
     ):
         """
@@ -230,8 +231,13 @@ class LatentDiffusion(nn.Module):
                 external_cond = (-torch.ones_like(external_cond)).to(self.device)
 
             cond = torch.cat([autoreg_cond, external_cond], 1)
+
+            ### for now set text_cond to external_cond
+            text_cond = external_cond
         else:
             cond = autoreg_cond
+        
+        
 
         if x0.size(1) == self.eps_model.out_channels:  # generating form
             if self.debug_mode:
@@ -241,7 +247,7 @@ class LatentDiffusion(nn.Module):
 
             xt = self.q_sample(x0, t, eps=noise)
 
-            eps_theta = self.eps_model(xt, t, cond)
+            eps_theta = self.eps_model(xt, t, cond, text_cond)
 
             loss = F.mse_loss(noise, eps_theta)
         else:
@@ -257,7 +263,7 @@ class LatentDiffusion(nn.Module):
 
             xt = torch.cat([front_t, background_cond], 1)
 
-            eps_theta = self.eps_model(xt, t, cond)
+            eps_theta = self.eps_model(xt, t, cond, text_cond)
 
             loss = F.mse_loss(noise, eps_theta)
         if self.debug_mode:

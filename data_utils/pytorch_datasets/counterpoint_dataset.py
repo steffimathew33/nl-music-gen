@@ -42,6 +42,7 @@ class CounterpointDataset(HierarchicalDatasetBase):
         self.phrase_rolls = [expand_roll(roll, nbpm) for roll, nbpm in zip(self.phrase_rolls, self.nbpms)]
 
     def get_data_sample(self, song_id, start_id, shift):
+        # notes per beat per measure
         nbpm = self.nbpms[song_id]
 
         pitch_shift = compute_pitch_shift_value(shift, self.min_mel_pitches[song_id], self.max_mel_pitches[song_id])
@@ -62,32 +63,66 @@ class CounterpointDataset(HierarchicalDatasetBase):
         # prepare for the external condition
         if self.use_external_cond:
             external_cond = self.get_external_cond(start_id)
+            text_external_cond = external_cond.copy()
         else:
             external_cond = None
+            text_external_cond = None
 
         # randomly mask background
         if self.mask_background and np.random.random() > 0.8:
             img[2:] = -1
 
-        return img, autoreg_cond, external_cond
+        # return img, autoreg_cond, external_cond
+        return img, autoreg_cond, external_cond, text_external_cond
+        # originally 3 return values here -- is it okay to return another external condition?
+        # this is called by __getitem__ in base_class.py, which is called by the Pytorch DataLoader
+        # so I don't know whether getitem is only expecting 3 return
+        # it doesn't matter u can return more than 3 items
+        
 
     def lang_to_img(self, song_id, start_id, end_id, tgt_lgth=None):
+        # key and phrase are from form
         key_roll = self._key[:, start_id: end_id]  # (2, L, 12)
         phrase_roll = self._phrase[:, start_id: end_id]  # (6, L, 1)
-        red_mel_roll = self._red_mel[:, start_id: end_id]  # (2, L, 128)
-        red_chd_roll = self._red_chd[:, start_id: end_id]  # (6, L, 12)
+
+        # Reduced melody rolls
+        red_mel_roll = self._red_mel[:, start_id: end_id]  # (2, L, 128), 2 melody channels over time, 128-pitch height 
+
+        # Reduced chord rolls
+        red_chd_roll = self._red_chd[:, start_id: end_id]  # (6, L, 12) # reduced chord rolls, 6 chord channels over time, 12-key height
+
+        
+        # --- DEBUG PRINTS ---
+        # print("\n=== DEBUG: Input tensors ===")
+        # for name, t in {
+        #     "key_roll": key_roll,
+        #     "phrase_roll": phrase_roll,
+        #     "red_mel_roll": red_mel_roll,
+        #     "red_chd_roll": red_chd_roll,
+        # }.items():
+        #     print(f"{name}.shape = {t.shape}")
+        #     print(f"{name}: min={t.min():.3f}, max={t.max():.3f}, mean={t.mean():.3f}")
+        #     print(f"{name} sample (first channel, :5, :12):\n{t[0, :5, :12]}\n")
+
 
         actual_l = key_roll.shape[1]
 
         # to output image
         if tgt_lgth is None:
             tgt_lgth = self._key.shape[1] - start_id
+        
         img = np.zeros((self.n_channels, tgt_lgth, 132), dtype=np.float32)
         img[0: 2, 0: actual_l, 0: 128] = red_mel_roll
         img[0: 2, 0: actual_l, 36: 48] = red_chd_roll[2: 4]
         img[0: 2, 0: actual_l, 24: 36] = red_chd_roll[4: 6]
 
         img[4: 10, 0: actual_l] = phrase_roll
+
+        # print("\n=== DEBUG: After combining melody/chords/phrases ===")
+        # print(f"img.shape = {img.shape}")
+        # print(f"img[0]: min={img[0].min():.3f}, max={img[0].max():.3f}")
+        # print(f"img[0, :5, :12]:\n{img[0, :5, :12]}\n")
+
 
         img = img.reshape((self.n_channels, tgt_lgth, 11, 12))
         img[2: 4, 0: actual_l] = key_roll[:, :, np.newaxis]
@@ -118,7 +153,11 @@ class CounterpointDataset(HierarchicalDatasetBase):
         return external_cond
 
     def show(self, item, show_img=True):
-        data, autoreg, external = self[item]
+        sample = self[item]
+        if len(sample) == 4:
+            data, autoreg, external, _text_external = sample
+        else:
+            data, autoreg, external = sample
 
         titles = ['red_mel/red_chd', 'key', 'phrase0-1', 'phrase2-3', 'phrase4-5']
 

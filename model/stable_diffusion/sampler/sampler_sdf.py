@@ -136,23 +136,26 @@ class SDFSampler(DiffusionSampler):
             else:
                 external_cond = -torch.ones(batch_size, 4, self.d_cond, device=x.device, dtype=x.dtype)
                 external_uncond = None
-            cond = torch.cat([autoreg_cond, external_cond], 1)
+            # Separate conditions: cond = autoreg_cond, text_cond = external_cond
+            cond = autoreg_cond
             if external_uncond is None:
                 uncond = None
             else:
-                uncond = torch.cat([autoreg_cond, external_uncond], 1)
+                uncond = autoreg_cond
+                uncond_text = external_uncond
         else:
             cond = autoreg_cond
             uncond = None
+            uncond_text = None
 
         if background_cond is not None:
             x = torch.cat([x, background_cond], 1) if background_cond is not None else x
 
         if uncond is None:
-            e_t = self.model(x, t, cond)
+            e_t = self.model(x, t, cond, external_cond)
         else:
-            e_t_cond = self.model(x, t, cond)
-            e_t_uncond = self.model(x, t, uncond)
+            e_t_cond = self.model(x, t, cond, external_cond)
+            e_t_uncond = self.model(x, t, uncond, uncond_text)
             e_t = e_t_uncond + uncond_scale * (e_t_cond - e_t_uncond)
         return e_t
 

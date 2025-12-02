@@ -106,14 +106,16 @@ class AccompanimentDataset(HierarchicalDatasetBase):
         # prepare for the external condition
         if self.use_external_cond:
             external_cond = self.get_external_cond(start_id)
+            text_external_cond = external_cond.copy()
         else:
             external_cond = None
+            text_external_cond = None
 
         # randomly mask background
         if self.mask_background and np.random.random() > 0.8:
             img[2:] = -1
 
-        return img, autoreg_cond, external_cond
+        return img, autoreg_cond, external_cond, text_external_cond
 
     def lang_to_img(self, song_id, start_id, end_id, tgt_lgth=None):
         key_roll = self._key[:, start_id: end_id]  # (2, L, 12)
@@ -151,7 +153,12 @@ class AccompanimentDataset(HierarchicalDatasetBase):
         return acc_to_polydis_pr_mat(acc, length=self.max_l)
 
     def show(self, item, show_img=True):
-        data, autoreg, external = self[item]
+        # data, autoreg, external = self[item]
+        sample = self[item]
+        if len(sample) == 4:
+            data, autoreg, external, _text_external = sample
+        else:
+            data, autoreg, external = sample
 
         titles = ['acc', 'mel+chd', 'mel+rough_chd', 'key', 'phrase0-1', 'phrase2-3', 'phrase4-5']
         print(data.shape)

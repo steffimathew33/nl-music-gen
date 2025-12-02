@@ -56,10 +56,11 @@ class SpatialTransformer(nn.Module):
             channels, channels, kernel_size=1, stride=1, padding=0
         )
 
-    def forward(self, x: torch.Tensor, cond: torch.Tensor):
+    def forward(self, x: torch.Tensor, cond: torch.Tensor, text_cond: torch.Tensor):
         """
         :param x: is the feature map of shape `[batch_size, channels, height, width]`
         :param cond: is the conditional embeddings of shape `[batch_size,  n_cond, d_cond]`
+        :param text_cond: is a second conditional tensor `[batch_size, n_text_cond, d_cond]`
         """
         # Get shape `[batch_size, channels, height, width]`
         b, c, h, w = x.shape
@@ -74,7 +75,9 @@ class SpatialTransformer(nn.Module):
         x = x.permute(0, 2, 3, 1).view(b, h * w, c)
         # Apply the transformer layers
         for block in self.transformer_blocks:
-            x = block(x, cond)
+            x = block(x, cond, text_cond)
+            # is this okay to feed in separately
+
         # Reshape and transpose from `[batch_size, height * width, channels]`
         # to `[batch_size, channels, height, width]`
         x = x.view(b, h, w, c).permute(0, 3, 1, 2)
@@ -98,6 +101,7 @@ class BasicTransformerBlock(nn.Module):
         super().__init__()
         # Self-attention layer and pre-norm layer
         self.attn1 = CrossAttention(d_model, d_model, n_heads, d_head)
+        # def __init__(self, d_model: int, d_cond: int, n_heads: int, d_head: int, is_inplace: bool = True):
         self.norm1 = nn.LayerNorm(d_model)
         # Cross attention layer and pre-norm layer
         self.attn2 = CrossAttention(d_model, d_cond, n_heads, d_head)
@@ -106,15 +110,18 @@ class BasicTransformerBlock(nn.Module):
         self.ff = FeedForward(d_model)
         self.norm3 = nn.LayerNorm(d_model)
 
-    def forward(self, x: torch.Tensor, cond: torch.Tensor):
+    def forward(self, x: torch.Tensor, cond: torch.Tensor, text_cond: torch.Tensor):
         """
         :param x: are the input embeddings of shape `[batch_size, height * width, d_model]`
         :param cond: is the conditional embeddings of shape `[batch_size,  n_cond, d_cond]`
+        :param text_cond: is a second conditional tensor `[batch_size, n_text_cond, d_cond]`
         """
         # Self attention
         x = self.attn1(self.norm1(x)) + x
-        # Cross-attention with conditioning
-        x = self.attn2(self.norm2(x), cond=cond) + x
+        # Cross-attention performed with both conditioning and text conditioning
+        x = self.attn2(self.norm2(x), cond=cond, text_cond=text_cond) + x
+        # x = self.attn2(self.norm2(x), cond=cond) + x
+        
         # Feed-forward network
         x = self.ff(self.norm3(x)) + x
         #
@@ -158,8 +165,17 @@ class CrossAttention(nn.Module):
         # Query, key and value mappings
         d_attn = d_head * n_heads
         self.to_q = nn.Linear(d_model, d_attn, bias=False)
-        self.to_k = nn.Linear(d_cond, d_attn, bias=False)
-        self.to_v = nn.Linear(d_cond, d_attn, bias=False)
+        
+        # Separate projections for two external conditions
+        
+        # should d_cond be the parameter for all of these?
+        self.to_k1 = nn.Linear(d_cond, d_attn, bias=False)
+        self.to_v1 = nn.Linear(d_cond, d_attn, bias=False)
+        self.to_k2 = nn.Linear(d_cond, d_attn, bias=False)
+        self.to_v2 = nn.Linear(d_cond, d_attn, bias=False)
+
+        # impact of external text conditioning
+        self.scalar = 0.5
 
         # Final linear layer
         self.to_out = nn.Sequential(nn.Linear(d_attn, d_model))
@@ -179,28 +195,46 @@ class CrossAttention(nn.Module):
         except ImportError:
             self.flash = None
 
-    def forward(self, x: torch.Tensor, cond: Optional[torch.Tensor] = None):
+    def forward(self, x: torch.Tensor, cond: Optional[torch.Tensor] = None, text_cond: Optional[torch.Tensor] = None):
         """
         :param x: are the input embeddings of shape `[batch_size, height * width, d_model]`
         :param cond: is the conditional embeddings of shape `[batch_size, n_cond, d_cond]`
+        :param text_cond: optional second conditional embeddings `[batch_size, n_text_cond, d_cond]`
         """
 
-        # If `cond` is `None` we perform self attention
+        # self.attn1() calls this forward function
+        # this function should be able to handle what happens if a text_cond is passed in (cross-attention) or not passed in (self-attention)
+
+        # If no condition present, we perform self attention, else cross-attention
         has_cond = cond is not None
-        if not has_cond:
-            cond = x
+        has_text_cond = text_cond is not None
 
         # Get query, key and value vectors
         q = self.to_q(x)
-        k = self.to_k(cond)
-        v = self.to_v(cond)
-
-        # Use flash attention if it's available and the head size is less than or equal to `128`
-        if CrossAttention.use_flash_attention and self.flash is not None and not has_cond and self.d_head <= 128:
-            return self.flash_attention(q, k, v)
-        # Otherwise, fallback to normal attention
+        
+        # If no condition present, we perform self attention
+        if has_cond:
+            # Cross-attention: use cond and text_cond for keys and values
+            k1 = self.to_k1(cond)
+            v1 = self.to_v1(cond)
+            # Handle text_cond - if it's None, we only use cond
+            if has_text_cond:
+                k2 = self.to_k2(text_cond)
+                v2 = self.to_v2(text_cond)
+                return self.normal_attention(q, k1, v1) + self.scalar * self.normal_attention(q, k2, v2)
+            else:
+                # Only use cond if text_cond is None
+                return self.normal_attention(q, k1, v1)
         else:
-            return self.normal_attention(q, k, v)
+            # Self-attention: use x for keys and values
+            k = self.to_k1(x)
+            v = self.to_v1(x)
+            # Use flash attention if it's available and the head size is less than or equal to `128`
+            if CrossAttention.use_flash_attention and self.flash is not None and self.d_head <= 128:
+                return self.flash_attention(q, k, v)
+            else:
+                # Fallback to normal attention for self-attention
+                return self.normal_attention(q, k, v)
 
     def flash_attention(self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor):
         """

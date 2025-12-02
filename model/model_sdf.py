@@ -49,6 +49,11 @@ class Diffpro_SDF(nn.Module):
         """
         # x = batch.float().to(self.device)
 
-        x, autoreg_cond, external_cond = batch
-        loss = self.ldm.loss(x, autoreg_cond, external_cond)
+        # Expect dataset to return (x, autoreg_cond, external_cond, text_cond)
+        if len(batch) == 4:
+            x, autoreg_cond, external_cond, text_cond = batch
+            loss = self.ldm.loss(x, autoreg_cond, external_cond, text_cond)
+        else:
+            x, autoreg_cond, external_cond = batch
+            loss = self.ldm.loss(x, autoreg_cond, external_cond)
         return {"loss": loss}

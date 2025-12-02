@@ -167,7 +167,7 @@ class UNetModel(nn.Module):
         # $\cos\Bigg(\frac{t}{10000^{\frac{2i}{c}}}\Bigg)$ and $\sin\Bigg(\frac{t}{10000^{\frac{2i}{c}}}\Bigg)$
         return torch.cat([torch.cos(args), torch.sin(args)], dim=-1)
 
-    def forward(self, x: torch.Tensor, time_steps: torch.Tensor, cond: torch.Tensor):
+    def forward(self, x: torch.Tensor, time_steps: torch.Tensor, cond: torch.Tensor, text_cond: torch.Tensor):
         """
         :param x: is the input feature map of shape `[batch_size, channels, width, height]`
         :param time_steps: are the time steps of shape `[batch_size]`
@@ -182,16 +182,16 @@ class UNetModel(nn.Module):
 
         # Input half of the U-Net
         for module in self.input_blocks:
-            x = module(x, t_emb, cond)
+            x = module(x, t_emb, cond, text_cond)
             x_input_block.append(x)
         # Middle of the U-Net
-        x = self.middle_block(x, t_emb, cond)
+        x = self.middle_block(x, t_emb, cond, text_cond)
         # Output half of the U-Net
         for module in self.output_blocks:
             # print(x.size(), 'a')
             x = torch.cat([x, x_input_block.pop()], dim=1)
             # print(x.size(), 'b')
-            x = module(x, t_emb, cond)
+            x = module(x, t_emb, cond, text_cond)
 
         # Final normalization and $3 \times 3$ convolution
         return self.out(x)
@@ -204,12 +204,13 @@ class TimestepEmbedSequential(nn.Sequential):
     This sequential module can compose of different modules suck as `ResBlock`,
     `nn.Conv` and `SpatialTransformer` and calls them with the matching signatures
     """
-    def forward(self, x, t_emb, cond=None):
+    def forward(self, x, t_emb, cond=None, text_cond=None):
         for layer in self:
             if isinstance(layer, ResBlock):
                 x = layer(x, t_emb)
             elif isinstance(layer, SpatialTransformer):
-                x = layer(x, cond)
+                # text_cond = cond
+                x = layer(x, cond=cond, text_cond=text_cond)
             else:
                 x = layer(x)
         return x
