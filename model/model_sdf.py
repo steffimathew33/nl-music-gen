@@ -49,6 +49,11 @@ class Diffpro_SDF(nn.Module):
         """
         # x = batch.float().to(self.device)
 
-        x, autoreg_cond, external_cond = batch
-        loss = self.ldm.loss(x, autoreg_cond, external_cond)
+        # Optional song embedding as the fourth element in the batch
+        if len(batch) == 4:
+            x, autoreg_cond, external_cond, song_cond = batch
+        else:
+            x, autoreg_cond, external_cond = batch
+            song_cond = None
+        loss = self.ldm.loss(x, autoreg_cond, external_cond, song_cond)
         return {"loss": loss}

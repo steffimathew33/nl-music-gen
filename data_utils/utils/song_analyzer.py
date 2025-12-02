@@ -175,5 +175,5 @@ class LanguageExtractor:
         return {'name': self.song.song_name, 'nbpm': self.song.num_beat_per_measure,
                 'nspb': self.song.num_step_per_beat,
                 'min_mel_pitch': min_mel_pitch, 'max_mel_pitch': max_mel_pitch,
-                'languages': languages}
+                'languages': languages, 'embedding': self.song.embedding}
 

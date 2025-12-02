@@ -136,7 +136,7 @@ class GenerationCanvasBase:
         start_id = [start_id] * self.batch_size if isinstance(start_id, int) else start_id
         end_id = [end_id] * self.batch_size if isinstance(end_id, int) else end_id
         return np.array([(self.mask[i, :, s: e] == 1).all() for i, (s, e) in enumerate(zip(start_id, end_id))],
-                        dtype=np.bool)
+                        dtype=bool)
 
     def write_generation(self, new_generation, start_id, end_id, sel_song_ids=None, quantize=True):
         if quantize:

@@ -238,3 +238,26 @@ class HierarchicalDatasetBase(Dataset):
 
     def get_external_cond(self, start_id):
         raise NotImplementedError
+
+    def get_song_embedding(self, song_id):
+        """
+        Returns a per-song embedding suitable for model consumption.
+        - Accepts `torch.Tensor` or `np.ndarray` of shape (D,) or (1, D)
+        - Converts to `torch.Tensor` if already tensor, else returns numpy for collate to convert
+        """
+        try:
+            if hasattr(self, 'embeddings') and self.embeddings is not None:
+                emb = self.embeddings[song_id]
+                if emb is None:
+                    return None
+                # Normalize common shapes
+                if hasattr(emb, 'detach'):
+                    # torch.Tensor
+                    return emb.reshape(-1)
+                else:
+                    # numpy or list; leave conversion to collate
+                    emb = np.array(emb).reshape(-1)
+                    return emb
+        except Exception:
+            pass
+        return None

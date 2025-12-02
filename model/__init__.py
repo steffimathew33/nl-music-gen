@@ -1,4 +1,5 @@
 from .stable_diffusion.latent_diffusion import LatentDiffusion
+from torch import nn
 from .model_sdf import Diffpro_SDF
 from .stable_diffusion.model.unet import UNetModel
 from .stable_diffusion.model.autoreg_cond_encoders import *
@@ -27,11 +28,15 @@ def init_ldm_model(mode, use_autoreg_cond, use_external_cond, params, debug_mode
     autoreg_cond_enc = None if autoreg_enc_cls is None else autoreg_enc_cls()
     external_cond_enc = None if external_enc_cls is None else external_enc_cls.create_model()
 
+    # Song embedding encoder: map 768-d song embedding to d_cond
+    song_cond_enc = nn.Linear(768, params.d_cond)
+
     ldm_model = LatentDiffusion(
         unet_model=unet_model,
         autoencoder=None,
         autoreg_cond_enc=autoreg_cond_enc,
         external_cond_enc=external_cond_enc,
+        song_cond_enc=song_cond_enc,
         latent_scaling_factor=params.latent_scaling_factor,
         n_steps=params.n_steps,
         linear_start=params.linear_start,

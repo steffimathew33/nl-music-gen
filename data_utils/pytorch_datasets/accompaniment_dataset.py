@@ -62,6 +62,12 @@ class AccompanimentDataset(HierarchicalDatasetBase):
 
         self.indices = self._song_id_to_indices()
 
+        # Song embeddings taken from analyses (training data) (train_analyses from data_utils.__init__.py)
+        try:
+            self.embeddings = [analysis.get('embedding', None) for analysis in analyses]
+        except Exception:
+            self.embeddings = None
+
     def expand_key_rolls(self):
         self.key_rolls = [expand_roll(roll, nbpm * nspb)
                           for roll, nbpm, nspb in zip(self.key_rolls, self.nbpms, self.nspbs)]
@@ -102,18 +108,26 @@ class AccompanimentDataset(HierarchicalDatasetBase):
             autoreg_cond = self.get_autoreg_cond(song_id, start_id, nbpm * nspb)
         else:
             autoreg_cond = None
-
+        
         # prepare for the external condition
         if self.use_external_cond:
             external_cond = self.get_external_cond(start_id)
         else:
             external_cond = None
 
+        # # prepare for the external condition
+        # # Always prepare external condition (song-level embedding or fallback)
+        # self._current_song_id = int(song_id)
+        # external_cond = self.get_external_cond(start_id)
+
         # randomly mask background
         if self.mask_background and np.random.random() > 0.8:
             img[2:] = -1
 
-        return img, autoreg_cond, external_cond
+        # Always attach song embedding as fourth element if available
+        song_emb = self.get_song_embedding(song_id)
+        
+        return img, autoreg_cond, external_cond, song_emb
 
     def lang_to_img(self, song_id, start_id, end_id, tgt_lgth=None):
         key_roll = self._key[:, start_id: end_id]  # (2, L, 12)

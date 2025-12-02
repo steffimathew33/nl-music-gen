@@ -26,13 +26,23 @@ class FormDataset(HierarchicalDatasetBase):
 
         self.indices = self._song_id_to_indices()
 
+        # Song embeddings taken from analyses (training data) (train_analyses from data_utils.__init__.py)
+        try:
+            self.embeddings = [analysis.get('embedding', None) for analysis in analyses]
+        except Exception:
+            self.embeddings = None
+
     def get_data_sample(self, song_id, start_id, shift):
         self.store_key(song_id, shift)
         self.store_phrase(song_id)
 
         img = self.lang_to_img(song_id, start_id, end_id=start_id + self.max_l, tgt_lgth=self.max_l)
 
-        return img, None, None
+        ####
+        # Always attach song embedding as fourth element if available
+        song_emb = self.get_song_embedding(song_id)
+
+        return img, None, None, song_emb
 
     def lang_to_img(self, song_id, start_id, end_id, tgt_lgth=None):
         key_roll = self._key[:, start_id: end_id]  # (2, L, 12)
