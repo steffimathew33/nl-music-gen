@@ -41,9 +41,11 @@ class FormDataset(HierarchicalDatasetBase):
 
         ####
         # Always attach song embedding as fourth element if available
-        song_emb = self.get_song_embedding(song_id)
+        # song_emb = self.get_song_embedding(song_id)
 
-        return img, None, None, song_emb
+        return img, None, None
+
+        # return img, None, None, song_emb
 
     def lang_to_img(self, song_id, start_id, end_id, tgt_lgth=None):
         '''
