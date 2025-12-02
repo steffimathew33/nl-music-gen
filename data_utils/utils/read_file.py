@@ -2,6 +2,7 @@ import numpy as np
 import mir_eval
 import os
 from .song_data_structure import McpaMusic
+import torch
 
 
 def _cum_time_to_time_dur(d):
@@ -109,8 +110,11 @@ def read_data(data_fn, acc_fn, num_beat_per_measure=4, num_step_per_beat=4,
     acc = np.concatenate([bridge_track, piano_track], 0)
     acc = acc[acc[:, 0].argsort()]
 
+    # Create 1x768 tensor with random values to represent temporary embedding
+    embedding = torch.randn(1, 768)
+
     song = McpaMusic(melody, chord, acc, label, num_beat_per_measure,
-                     num_step_per_beat, song_name, clean_chord_unit)
+                     num_step_per_beat, song_name, clean_chord_unit, embedding)
 
     return song
 

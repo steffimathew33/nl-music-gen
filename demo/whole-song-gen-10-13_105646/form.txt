@@ -1,0 +1,3 @@
+i4A4A4B8b4A4B8o4
+key: 7
+is_major: True

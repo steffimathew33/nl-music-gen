@@ -35,6 +35,12 @@ class CounterpointDataset(HierarchicalDatasetBase):
 
         self.indices = self._song_id_to_indices()
 
+        # Song embeddings taken from analyses (training data) (train_analyses from data_utils.__init__.py)
+        try:
+            self.embeddings = [analysis.get('embedding', None) for analysis in analyses]
+        except Exception:
+            self.embeddings = None
+
     def expand_key_rolls(self):
         self.key_rolls = [expand_roll(roll, nbpm) for roll, nbpm in zip(self.key_rolls, self.nbpms)]
 
@@ -63,7 +69,7 @@ class CounterpointDataset(HierarchicalDatasetBase):
         # prepare for the external condition
         if self.use_external_cond:
             external_cond = self.get_external_cond(start_id)
-            text_external_cond = external_cond.copy()
+            text_external_cond = self.get_song_embedding(song_id)
         else:
             external_cond = None
             text_external_cond = None
@@ -73,12 +79,15 @@ class CounterpointDataset(HierarchicalDatasetBase):
             img[2:] = -1
 
         # return img, autoreg_cond, external_cond
-        return img, autoreg_cond, external_cond, text_external_cond
+        # return img, autoreg_cond, external_cond, text_external_cond
         # originally 3 return values here -- is it okay to return another external condition?
         # this is called by __getitem__ in base_class.py, which is called by the Pytorch DataLoader
         # so I don't know whether getitem is only expecting 3 return
         # it doesn't matter u can return more than 3 items
         
+        # Always attach song embedding as fourth element if available
+        
+        return img, autoreg_cond, external_cond, text_external_cond
 
     def lang_to_img(self, song_id, start_id, end_id, tgt_lgth=None):
         # key and phrase are from form

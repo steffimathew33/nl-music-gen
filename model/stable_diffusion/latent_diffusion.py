@@ -54,6 +54,7 @@ class LatentDiffusion(nn.Module):
         autoencoder: Optional[Autoencoder],
         autoreg_cond_enc,
         external_cond_enc,
+        song_cond_enc: Optional[nn.Module],
         latent_scaling_factor: float,
         n_steps: int,
         linear_start: float,
@@ -78,6 +79,7 @@ class LatentDiffusion(nn.Module):
         self.first_stage_model = autoencoder
         self.autoreg_cond_enc = autoreg_cond_enc
         self.external_cond_enc = external_cond_enc
+        self.song_cond_enc = song_cond_enc
         # freeze autoencoder's parameters
         if self.first_stage_model is not None:
             for param in self.first_stage_model.parameters():
@@ -238,6 +240,17 @@ class LatentDiffusion(nn.Module):
             cond = autoreg_cond
         
         
+
+        # Append song embedding conditioning if provided
+        if song_cond is not None and self.song_cond_enc is not None:
+            # song_cond expected shape: [batch, D] or [batch, 1, D]
+            if song_cond.dim() == 3:
+                song_cond_vec = song_cond[:, 0, :]
+            else:
+                song_cond_vec = song_cond
+            song_cond_proj = self.song_cond_enc(song_cond_vec)
+            song_cond_proj = song_cond_proj.unsqueeze(1)
+            cond = torch.cat([cond, song_cond_proj], 1)
 
         if x0.size(1) == self.eps_model.out_channels:  # generating form
             if self.debug_mode:
