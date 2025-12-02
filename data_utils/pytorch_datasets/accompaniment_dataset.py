@@ -112,7 +112,8 @@ class AccompanimentDataset(HierarchicalDatasetBase):
         # prepare for the external condition
         if self.use_external_cond:
             external_cond = self.get_external_cond(start_id)
-            text_external_cond = external_cond.copy()
+            text_external_cond = self.get_song_embedding(song_id)
+            # text_external_cond = external_cond.copy()
         else:
             external_cond = None
             text_external_cond = None
