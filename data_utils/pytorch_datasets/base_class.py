@@ -1,5 +1,6 @@
 import numpy as np
 from torch.utils.data import Dataset, DataLoader
+import torch
 
 
 def compute_pitch_shift_value(shift, min_pitch, max_pitch):
@@ -241,23 +242,27 @@ class HierarchicalDatasetBase(Dataset):
 
     def get_song_embedding(self, song_id):
         """
-        Returns a per-song embedding suitable for model consumption.
-        - Accepts `torch.Tensor` or `np.ndarray` of shape (D,) or (1, D)
-        - Converts to `torch.Tensor` if already tensor, else returns numpy for collate to convert
+        Return the song-level **text embedding** that is loaded in
+        `data_utils.utils.read_file.read_data` from `text_description.pt`.
+
+        The embedding is stored on each `McpaMusic` instance, propagated into
+        the `analysis['embedding']` field by `LanguageExtractor.analyze_for_training`,
+        and then collected into `self.embeddings` by dataset subclasses.
+
+        This method always returns a 1D `torch.Tensor` (or `None` if unavailable).
         """
-        try:
-            if hasattr(self, 'embeddings') and self.embeddings is not None:
-                emb = self.embeddings[song_id]
-                if emb is None:
-                    return None
-                # Normalize common shapes
-                if hasattr(emb, 'detach'):
-                    # torch.Tensor
-                    return emb.reshape(-1)
-                else:
-                    # numpy or list; leave conversion to collate
-                    emb = np.array(emb).reshape(-1)
-                    return emb
-        except Exception:
-            pass
-        return None
+        if not hasattr(self, "embeddings") or self.embeddings is None:
+            return None
+
+        # self.embeddings[song_id] is populated from analysis['embedding'], which comes from McpaMusic.embedding
+        emb = self.embeddings[song_id]
+        
+        if emb is None:
+            return None
+
+        # Ensure we always return a torch.Tensor
+        if not isinstance(emb, torch.Tensor):
+            emb = torch.as_tensor(emb)
+
+        # Flatten to (D,) for easy conditioning use
+        return emb.reshape(-1)

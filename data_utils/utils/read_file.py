@@ -111,10 +111,11 @@ def read_data(data_fn, acc_fn, num_beat_per_measure=4, num_step_per_beat=4,
     acc = acc[acc[:, 0].argsort()]
 
     # Create 1x768 tensor with random values to represent temporary embedding
-    embedding = torch.randn(1, 768)
+    # embedding = torch.randn(1, 768)
+    text_embedding = torch.load(os.path.join(acc_fn, 'text_description.pt'))
 
     song = McpaMusic(melody, chord, acc, label, num_beat_per_measure,
-                     num_step_per_beat, song_name, clean_chord_unit, embedding)
+                     num_step_per_beat, song_name, clean_chord_unit, text_embedding)
 
     return song
 
